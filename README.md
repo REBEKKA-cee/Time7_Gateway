@@ -1,79 +1,169 @@
-Time7 Gateway – Authentication API
+Time7 Authentication Gateway (Mock Impinj IAS Stack
 
-Phase 1: Mock Verification Flow
+This project implements a lightweight RFID authentication system, simulating the full Impinj Reader → Gateway → IAS verification flow using local mock services.
 
-This project provides a lightweight gateway API for verifying RFID EPC tags.
-Phase 1 implements a mock verification logic (no real Impinj reader connection yet).
+It allows local end-to-end development without requiring any physical Impinj Reader or IAS backend.
 
-The purpose of Phase 1 is to allow frontend/mobile clients to start integration and testing early.
+End-to-End Architecture
 
-Features (Phase 1)
+Mock Reader → Time7 Gateway → Mock IAS → Time7 Gateway → Client
 
-FastAPI-based lightweight gateway server
-	•	/api/verify endpoint that accepts EPC scanning events
-	•	Mock verification logic:
-	•	EPC starting with “3034” → authentic
-	•	All others → mismatch
-	•	Standardized response format
-	•	Includes schemas, enums, services and client modules
-	•	Ready for extension to real Impinj Reader & Octane SDK in Phase 2
+Mock Reader
+	•	Simulates Impinj Reader JSON payloads
+	•	Sends EPC scan events to Gateway /api/verify
 
+Time7 Gateway
+	•	Accepts scan events
+	•	Calls Mock IAS
+	•	Returns mapped authentication results
+	
+Mock IAS
+	•	Behaves like Impinj Authentication Service (IAS)
+	•	Returns: authentic / tampered / mismatch / unknown
+ 1. Project Structure
 
-  time7_gateway/
+Time7_Gateway/
 │
-├── api/
-│   ├── verify.py        # /api/verify verification endpoint
-│   └── admin.py         # admin utilities (health check etc.)
+├── mock_reader.py          # Mock Impinj Reader (sends ReaderEvent JSON)
+├── mock_ias.py             # Mock IAS service
 │
-├── models/
-│   ├── schemas.py       # Request & response models
-│   ├── enums.py         # AuthResult enum
-│   └── __init__.py
+├── time7_gateway/
+│   ├── api/
+│   │   └── verify.py       # Main API routing
+│   ├── clients/
+│   │   └── ias_client.py   # HTTP client for calling IAS
+│   ├── services/
+│   │   └── auth_service.py # Business logic behind verification
+│   ├── models/
+│   └── ...
 │
-├── services/
-│   ├── auth_service.py  # Core mock verification logic
-│   └── __init__.py
-│
-├── clients/
-│   ├── impinj_mock.py   # Mock client for Impinj verification
-│   └── __init__.py
-│
-├── storage/
-│   └── __init__.py      # Future logging/storage modules
-│
-└── main.py              # FastAPI application entrypoint
+└── README.md               # You are reading this file
 
-API Endpoints
+2. Mock Reader
+Mock Reader simulates Impinj Reader Event JSON:
+POST /data/stream
 
-Request (JSON)
 {
-  "epc": "303400000000000000000001",
-  "token": "optional-string",
+ POST /data/stream
+
+{
   "reader_id": "reader-001",
-  "timestamp": "2025-01-29T08:00:00Z"
+  "tags": [
+  
+    {
+      "epc": "303400000000000000000001",
+      "antenna": 1,
+      "rssi": -55.5,
+      "timestamp": "2025-02-03T10:00:00Z"
+    }
+  ]
 }
 
-Response (example)
+Mock Reader forwards each tag to the Gateway:
+
+POST http://127.0.0.1:8000/api/verify
+
+ 3. Gateway Verification Flow
+Gateway receives a tag and executes:
+	1.	Validate request
+	2.	Call IASClient.verify_epc()
+	3.	Map IAS result into internal model
+	4.	Return unified response
+Example response:
 {
   "epc": "303400000000000000000001",
   "result": "authentic",
   "message": "OK",
   "reader_id": "reader-001",
-  "timestamp": "2025-01-29T08:00:00Z",
-  "impinj_raw": null
+  "timestamp": "2025-02-03T10:00:00Z",
+  "impinj_raw": {
+    "result": "authentic",
+    "details": {
+      "epc": "303400000000000000000001",
+      "reader_id": "reader-001",
+      "verified_at": "2026-02-03T10:03:11.773253"
+    }
+  }
 }
 
-Mock Verification Logic (Phase 1)
+4. Mock IAS
+Mock IAS locally simulates authentication logic:
+	•	EPC prefix “3034” → authentic
+	•	EPC prefix “9999” → mismatch
+	•	Otherwise → tampered
 
-if epc.startswith("3034"):
-    return AuthResult.AUTHENTIC
-else:
-    return AuthResult.MISMATCH
-  This lets frontend/mobile apps test the workflow without connecting to real Impinj readers.
+Sample request:
+POST http://127.0.0.1:8200/verify
 
+ 5. How to Run
+Start Gateway (port 8000)
+uvicorn time7_gateway.main:app --reload --port 8000
+Start Mock IAS (port 8200)
+uvicorn mock_ias:app --reload --port 8200
+Start Mock Reader (port 8100)
+uvicorn mock_reader:app --reload --port 8100
+
+6. Test the Full Flow
+curl -X POST http://127.0.0.1:8100/data/stream \
+-H "Content-Type: application/json" \
+-d '{
+  "reader_id": "reader-001",
+  "tags": [
+
+    {
+      "epc": "303400000000000000000001",
+      "antenna": 1,
+      "rssi": -55.5,
+      "timestamp": "2025-02-03T10:00:00Z"
+    }
+  ]
+}
+
+Expected output:
+{
+  "sent": 1,
+  "results": [
   
+    {
+      "epc": "303400000000000000000001",
+      "result": "authentic",
+      "message": "OK",
+      ...
+    }
+  ]
+}
+This confirms the entire stack is working end-to-end.
 
+7. Future Improvements (Design Notes)
+The mock version intentionally simplifies many production features.
+Real system should include:
 
-    
+Idempotency
+	•	Add composite key: (partner_id, idempotency_key)
+	•	Avoid duplicate events
+
+Permission Checks
+	•	Validate API client scopes (verify:write, etc.)
+Error Handling
+	•	Retry with backoff
+	•	Circuit breaker for IAS timeout
+	•	Return proper 5xx on IAS failure
+
+Partner-Specific Logic
+	•	Routing engine
+	•	Custom flows per brand
+
+These are left as future iteration tasks.
+
+Summary
+
+This project provides a clean, local, end-to-end mock of Impinj IAS authentication, allowing development and debugging without hardware.
+
+It includes:
+	•	Mock Reader
+	•	Mock IAS
+	•	Gateway
+	•	Full verification pipeline
+	•	Clean modular structure
 
 
