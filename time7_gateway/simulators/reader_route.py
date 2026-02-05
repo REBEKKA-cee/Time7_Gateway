@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Request, HTTPException, Body
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from typing import Any
 
-from time7_gateway.simulators.ias_services import mock_ias_lookup
+from fastapi import APIRouter, Body, HTTPException, Request
+
 from time7_gateway.services.database import upsert_latest_tag
 
 router = APIRouter()
@@ -12,6 +14,10 @@ router = APIRouter()
 def reader_events(request: Request, payload: Any = Body(...)):
     active_tags = request.app.state.active_tags
     cache = request.app.state.tag_info_cache
+
+    ias_lookup = getattr(request.app.state, "ias_lookup", None)
+    if not callable(ias_lookup):
+        raise HTTPException(status_code=500, detail="IAS lookup not configured (app.state.ias_lookup)")
 
     tags_seen = 0
     product_info_fetched = 0
@@ -25,7 +31,7 @@ def reader_events(request: Request, payload: Any = Body(...)):
             tags_seen += 1
 
             if cache.get(tag_id) is None:
-                auth, info = mock_ias_lookup(tag_id)
+                auth, info = ias_lookup(tag_id)
                 cache.set(tag_id, auth, info)
                 product_info_fetched += 1
 
@@ -42,4 +48,4 @@ def reader_events(request: Request, payload: Any = Body(...)):
             "product_info_fetched": product_info_fetched,
         }
 
-    raise HTTPException(status_code=400, detail="Invalid payload. Expect {'tagIds': [...]}") 
+    raise HTTPException(status_code=400, detail="Invalid payload.") 
