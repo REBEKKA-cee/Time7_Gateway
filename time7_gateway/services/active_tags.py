@@ -16,10 +16,8 @@ def _utc(dt: datetime) -> datetime:
 
 
 class ActiveTags:
-    """
-    Tracks tags currently in the detection zone.
-    Tag is "active" if last_seen is within active_ttl_seconds.
-    """
+
+    # tags in detection zone currently
 
     def __init__(self, active_ttl_seconds: int = 5):
         self.active_ttl_seconds = int(active_ttl_seconds)

@@ -1,64 +1,60 @@
-from __future__ import annotations
-
+import json
 import os
-import sys
+from datetime import datetime, timezone
 
-from dotenv import load_dotenv
+import httpx
 
-
-from time7_gateway.clients.reader_client import ImpinjReaderClient
-
-
-def must_get(name: str) -> str:
-    v = os.getenv(name)
-    if not v:
-        raise RuntimeError(f"Missing required env var: {name}")
-    return v
+from time7_gateway.services.database import upsert_latest_tag
 
 
-def main() -> int:
-    load_dotenv() 
+class ImpinjReaderClient:
+    def __init__(self, base_url: str, username: str, password: str):
+        self.base_url = base_url 
+        self._client = httpx.AsyncClient(auth=(username, password), timeout=None)
 
-    reader_base_url = must_get("READER_BASE_URL")
-    reader_user = os.getenv("READER_USER", "admin")
-    reader_password = must_get("READER_PASSWORD")
+    async def stream_events(self):
+        url = f"{self.base_url}/data/" 
+        async with self._client.stream("GET", url) as r:
+            r.raise_for_status()
+            async for line in r.aiter_lines():
+                if not line:
+                    continue
+                yield json.loads(line)
 
-    gateway_webhook_url = must_get("GATEWAY_WEBHOOK_URL")
+    async def aclose(self):
+        await self._client.aclose()
 
-    batch_limit = int(os.getenv("READER_BATCH_LIMIT", "50"))
-    linger_ms = int(os.getenv("READER_BATCH_LINGER_MS", "200"))
 
-    client = ImpinjReaderClient(
-        base_url=reader_base_url,
-        username=reader_user,
-        password=reader_password,
-    )
+async def run_reader_stream(app):
+    reader_base_url = os.getenv("READER_BASE_URL", "").strip()
+    reader_user = os.getenv("READER_USER", "root").strip()
+    reader_password = os.getenv("READER_PASSWORD", "").strip()
+
+    client = ImpinjReaderClient(reader_base_url, reader_user, reader_password)
+
+    active_tags = app.state.active_tags
+    cache = app.state.tag_info_cache
+    ias_lookup = app.state.ias_lookup
 
     try:
-        result = client.set_event_webhook(
-            target_url=gateway_webhook_url,
-            enabled=True,
-            event_batch_limit=batch_limit,
-            event_batch_linger_ms=linger_ms,
-        )
-        print("Webhook configured:")
-        print(result)
+        async for ev in client.stream_events():
+            if ev.get("eventType") != "tagInventory":
+                continue
 
-        try:
-            current = client.get_event_webhook()
-            print("\nReader webhook config:")
-            print(current)
-        except Exception as e:
-            print(f"\n(Info) Could not fetch current webhook config: {e}")
+            tie = ev.get("tagInventoryEvent", {})
+            tag_id = tie.get("epcHex")
+            if not tag_id:
+                continue
 
-        return 0
+            seen_at = datetime.now(timezone.utc)
+
+            active_tags.mark_seen(tag_id, seen_at=seen_at)
+
+            # if not cached/new tag
+            if cache.get(tag_id) is None:
+                auth, info = ias_lookup(tag_id)
+                cache.set(tag_id, auth, info)
+                upsert_latest_tag(tag_id=tag_id, seen_at=seen_at, auth=auth, info=info)
+
     finally:
-        client.close()
-
-
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as e:
-        print(f"Failed: {e}")
-        sys.exit(1)
+        await client.aclose()

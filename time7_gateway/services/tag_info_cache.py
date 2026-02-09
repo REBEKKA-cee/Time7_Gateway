@@ -11,10 +11,9 @@ class TagInfo:
 
 
 class TagInfoCache:
-    """
-    Caches IAS results per tag_id so we don't re-check IAS repeatedly.
-    Cache TTL is long (hours/days), separate from presence TTL (seconds).
-    """
+
+
+    #caches IAS results. Avoid repeating checking with IAS
 
     def __init__(self, cache_ttl_hours: int = 24):
         self.cache_ttl = timedelta(hours=int(cache_ttl_hours))
