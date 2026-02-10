@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--interval", type=float, default=1.0)
     args = parser.parse_args()
 
-    endpoint = f"{args.base_url.rstrip('/')}/reader/events"
+    endpoint = f"{args.base_url.rstrip('/')}/sim/reader/events"
     print("POSTING TO:", endpoint)
     active_ids: list[str] = []
 

@@ -1,12 +1,13 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Iterable, List, Optional, Set
 
 
 @dataclass
 class ActiveTag:
     tag_id: str
-    last_seen: datetime
+    first_seen: datetime     
+    last_seen: datetime      
 
 
 def _utc(dt: datetime) -> datetime:
@@ -16,43 +17,38 @@ def _utc(dt: datetime) -> datetime:
 
 
 class ActiveTags:
-
-    # tags in detection zone currently
-
-    def __init__(self, active_ttl_seconds: int = 5):
-        self.active_ttl_seconds = int(active_ttl_seconds)
+    def __init__(self, remove_grace_seconds: float = 2.0) -> None:
         self._tags: Dict[str, ActiveTag] = {}
+        self._grace = timedelta(seconds=float(remove_grace_seconds))
 
-    def mark_seen(self, tag_id: str, seen_at: Optional[datetime] = None) -> ActiveTag:
+    def sync_seen(self, tag_ids: Iterable[str], seen_at: Optional[datetime] = None) -> Set[str]:
+
         now = _utc(seen_at) if seen_at else datetime.now(timezone.utc)
+        seen_now = {str(t) for t in (tag_ids or [])}
 
-        cur = self._tags.get(tag_id)
-        if cur is None:
-            cur = ActiveTag(tag_id=tag_id, last_seen=now)
-            self._tags[tag_id] = cur
-        else:
-            cur.last_seen = now
+        new_ids: Set[str] = set()
 
-        return cur
+        # Add new tags, refresh last_seen for existing tags that appear again
+        for tid in seen_now:
+            cur = self._tags.get(tid)
+            if cur is None:
+                self._tags[tid] = ActiveTag(tag_id=tid, first_seen=now, last_seen=now)
+                new_ids.add(tid)
+            else:
+                # Only refresh last_seen 
+                cur.last_seen = now
 
-    def removeExpired(self) -> int:
-        now = datetime.now(timezone.utc)
-        ttl = self.active_ttl_seconds
+        # Remove tags that haven't been seen in the last 2 seconds
+        cutoff = now - self._grace
+        for tid in list(self._tags.keys()):
+            if self._tags[tid].last_seen < cutoff:
+                del self._tags[tid]
 
-        expired = [
-            tid
-            for tid, t in self._tags.items()
-            if (now - t.last_seen).total_seconds() > ttl
-        ]
-        for tid in expired:
-            del self._tags[tid]
-
-        return len(expired)
+        return new_ids
 
     def get_active(self) -> List[ActiveTag]:
-        self.removeExpired()
-        return sorted(self._tags.values(), key=lambda x: x.last_seen, reverse=True)
+ 
+        return sorted(self._tags.values(), key=lambda x: x.first_seen, reverse=True)
 
     def get_active_ids(self) -> List[str]:
-        self.removeExpired()
         return list(self._tags.keys())

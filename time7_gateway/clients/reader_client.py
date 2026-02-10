@@ -13,7 +13,7 @@ class ImpinjReaderClient:
         self._client = httpx.AsyncClient(auth=(username, password), timeout=None)
 
     async def stream_events(self):
-        url = f"{self.base_url}/data/" 
+        url = f"{self.base_url}/data/stream" 
         async with self._client.stream("GET", url) as r:
             r.raise_for_status()
             async for line in r.aiter_lines():
@@ -48,9 +48,9 @@ async def run_reader_stream(app):
 
             seen_at = datetime.now(timezone.utc)
 
-            active_tags.mark_seen(tag_id, seen_at=seen_at)
+            active_tags.sync_seen([tag_id], seen_at=seen_at)
 
-            # if not cached/new tag
+            # if its new tag
             if cache.get(tag_id) is None:
                 auth, info = ias_lookup(tag_id)
                 cache.set(tag_id, auth, info)

@@ -8,9 +8,14 @@ from time7_gateway.clients.reader_client import run_reader_stream
 from time7_gateway.services.active_tags import ActiveTags
 from time7_gateway.services.tag_info_cache import TagInfoCache
 from time7_gateway.api.dashboard import router as dashboard_router
-from time7_gateway.simulators.reader_route import router as sim_reader_router
 from time7_gateway.simulators.ias_services import mock_ias_lookup
 from time7_gateway.clients.ias_services import ias_lookup as real_ias_lookup
+
+#terminal reader sim
+from time7_gateway.simulators.reader_route import router as terminal_inject_router
+#reader streamer sim
+from time7_gateway.simulators.reader_streamer import router as reader_stream_router
+
 
 load_dotenv()
 
@@ -27,7 +32,7 @@ def create_app() -> FastAPI:
     )
 
     # Shared in-memory state
-    app.state.active_tags = ActiveTags(active_ttl_seconds=5)
+    app.state.active_tags = ActiveTags(remove_grace_seconds=2.0)
     app.state.tag_info_cache = TagInfoCache(cache_ttl_hours=24)
 
     # IAS switch (mock vs real)
@@ -35,8 +40,10 @@ def create_app() -> FastAPI:
     app.state.ias_lookup = real_ias_lookup if ias_mode == "real" else mock_ias_lookup
 
     # Routers
-    app.include_router(sim_reader_router, prefix="/api/sim", tags=["reader-sim"])
+    app.include_router(reader_stream_router, tags=["reader-stream-sim"])
+    app.include_router(terminal_inject_router, prefix="/api/sim", tags=["reader-terminal-sim"])
     app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])
+
 
     @app.get("/health")
     def health():
