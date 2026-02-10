@@ -37,3 +37,25 @@ class TagInfoCache:
             info=info,
             fetched_at=datetime.now(timezone.utc),
         )
+#for debugging
+def snapshot(self) -> dict:
+    """
+    Snapshot of TagInfoCache content in the SAME shape your dashboard/DB uses:
+    id + (auth, info)
+    """
+    items = []
+
+
+    for tag_id, value in self._cache.items():
+       
+        if isinstance(value, (tuple, list)) and len(value) >= 2:
+            auth, info = value[0], value[1]
+        else:
+           
+            auth = getattr(value, "auth", None)
+            info = getattr(value, "info", None)
+
+        items.append({"id": tag_id, "auth": auth, "info": info})
+
+    items.sort(key=lambda x: x.get("id") or "")
+    return {"count": len(items), "items": items}

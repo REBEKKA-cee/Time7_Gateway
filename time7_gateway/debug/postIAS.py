@@ -4,7 +4,7 @@ import requests
 
 from time7_gateway.debug.config import BASE_URL, REFRESH_SECONDS
 
-URL = f"{BASE_URL}/debug/active-tags"
+URL = f"{BASE_URL}/debug/post-ias"
 REFRESH_SECONDS = 0.25
 
 
@@ -22,12 +22,12 @@ def main() -> None:
             clear_screen()
             items = data.get("items", [])
 
-            print("ActiveTags (PRE-IAS) — debug monitor (refreshes in-place)")
+            print("POST-IAS (TagInfoCache)")
             print(f"Endpoint: {URL}")
             print(f"Count: {data.get('count', len(items))}\n")
 
             for t in items:
-                print(f"- {t.get('id')} | first={t.get('first_seen')} | last={t.get('last_seen')}")
+                print(f"- {t.get('id')} | auth={t.get('auth')} | info={t.get('info')}")
 
             print("\nCTRL+C to stop.")
             time.sleep(REFRESH_SECONDS)
@@ -36,7 +36,7 @@ def main() -> None:
             break
         except Exception as e:
             clear_screen()
-            print("ActiveTags (PRE-IAS) — debug monitor (refreshes in-place)")
+            print("POST-IAS (TagInfoCache)")
             print(f"Endpoint: {URL}\n")
             print("Cannot fetch debug endpoint yet.")
             print(f"Error: {e}")
