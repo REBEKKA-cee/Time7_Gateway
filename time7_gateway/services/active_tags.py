@@ -55,9 +55,6 @@ class ActiveTags:
     
     #for debugging
     def snapshot(self) -> dict:
-        """
-        JSON-friendly snapshot of current active tags (PRE-IAS).
-        """
         items = [
             {
                 "id": t.tag_id,

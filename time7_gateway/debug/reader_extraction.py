@@ -36,7 +36,7 @@ def main() -> None:
             break
         except Exception as e:
             clear_screen()
-            print("ActiveTags (PRE-IAS) — debug monitor (refreshes in-place)")
+            print("ActiveTags (PRE-IAS)")
             print(f"Endpoint: {URL}\n")
             print("Cannot fetch debug endpoint yet.")
             print(f"Error: {e}")

@@ -39,10 +39,7 @@ class TagInfoCache:
         )
 #for debugging
 def snapshot(self) -> dict:
-    """
-    Snapshot of TagInfoCache content in the SAME shape your dashboard/DB uses:
-    id + (auth, info)
-    """
+
     items = []
 
 
