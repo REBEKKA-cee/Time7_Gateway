@@ -11,6 +11,9 @@ from time7_gateway.api.dashboard import router as dashboard_router
 from time7_gateway.simulators.ias_services import mock_ias_lookup
 from time7_gateway.clients.ias_services import ias_lookup as real_ias_lookup
 
+#for debug
+from time7_gateway.debug.routes import router as debug_router
+
 #terminal reader sim
 from time7_gateway.simulators.reader_route import router as terminal_inject_router
 #reader streamer sim
@@ -44,6 +47,8 @@ def create_app() -> FastAPI:
     app.include_router(terminal_inject_router, prefix="/api/sim", tags=["reader-terminal-sim"])
     app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])
 
+    # Debug endpoints
+    app.include_router(debug_router)
 
     @app.get("/health")
     def health():

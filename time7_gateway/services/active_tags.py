@@ -52,3 +52,19 @@ class ActiveTags:
 
     def get_active_ids(self) -> List[str]:
         return list(self._tags.keys())
+    
+    #for debugging
+    def snapshot(self) -> dict:
+        """
+        JSON-friendly snapshot of current active tags (PRE-IAS).
+        """
+        items = [
+            {
+                "id": t.tag_id,
+                "first_seen": t.first_seen,
+                "last_seen": t.last_seen,
+            }
+            for t in self.get_active()
+        ]
+
+        return {"count": len(items), "items": items}    
